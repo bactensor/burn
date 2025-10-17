@@ -11,8 +11,8 @@ BLOCK_TIME = 12
 
 logging.Formatter.converter = time.gmtime
 logging.basicConfig(
-    #level=logging.INFO,
-    level=logging.DEBUG,
+    level=logging.INFO,
+    #level=logging.DEBUG,
     format="%(asctime)sZ %(levelname)s %(message)s",
 )
 
@@ -158,7 +158,7 @@ class BurnValidator:
             logger.info("SN Owner UID: %s", sn_owner_uid)
             return sn_owner_uid
 
-        logger.debug("found %i owner neurons", len(owner_neurons))
+        logger.info("found %i owner neurons", len(owner_neurons))
         # Prefer the neuron that registered earliest on the subnet.
         burn_candidate = min(
             owner_neurons,
@@ -324,7 +324,7 @@ class BurnValidator:
             "Tempo",
             params=[self.config.netuid],
         ).value
-        logger.debug("Tempo: %s", tempo)
+        logger.info("Tempo: %s", tempo)
 
         blocks_since_last_step = self.subtensor.query_subtensor(
             "BlocksSinceLastStep",
@@ -332,7 +332,7 @@ class BurnValidator:
             params=[self.config.netuid],
         ).value
 
-        logger.debug("Blocks Since Last Step: %s", blocks_since_last_step)
+        logger.info("Blocks Since Last Step: %s", blocks_since_last_step)
         return tempo, blocks_since_last_step
 
     def wait_until_next_epoch(self):
@@ -341,12 +341,12 @@ class BurnValidator:
         logger.info("Sleeping until next epoch, %s seconds...", time_to_wait)
         time.sleep(time_to_wait)
 
-    def wait_until_next_perfect_weight_setting_opportunity(self, skip_current_tempo=False):
+    def wait_until_next_perfect_weight_setting_opportunity(self):
         tempo, blocks_since_last_step = self._get_tempo_data()
         remaining_blocks_until_epoch = tempo - blocks_since_last_step
 
         blocks_to_wait = remaining_blocks_until_epoch - self.delta
-        if blocks_to_wait < 1 or skip_current_tempo:
+        if blocks_to_wait < 1:
             # the moment has passed, it's too late to submit weights . Wait until the next one.
             blocks_to_wait += tempo
         elif blocks_to_wait <= self.delta:
@@ -354,7 +354,7 @@ class BurnValidator:
             return
         
         time_to_wait = blocks_to_wait * BLOCK_TIME + 0.1
-        logger.info("Sleeping until next perfect weights setting opportunity, %s seconds...", time_to_wait)
+        logger.info("Sleeping until next perfect weight setting opportunity, %s seconds...", time_to_wait)
         time.sleep(time_to_wait)
 
     def get_weights_version_key(self):
@@ -451,16 +451,19 @@ class BurnValidator:
                 continue
 
             # TODO: mechanisms
-            mech_count = subtensor.get_mechanism_count(netuid=netuid)
+            mech_count = self.subtensor.get_mechanism_count(netuid=self.config.netuid)
             if mech_count > 1:
-                logger.warning("Subnet %i mech count: %i", netuid, mech_count)
+                logger.warning("Subnet %i mech count: %i", self.config.netuid, mech_count)
 
             burn_uid = self.determine_burn_uid(neurons)
             uids, weights = self.prepare_weight_payload(neurons, burn_uid, this_uid)
-            if not self.submit_weights(uids, weights, version_key):
+            # TODO: should retry without ensuring vpermit again, version key etc
+            if self.submit_weights(uids, weights, version_key):
+                time.sleep(BLOCK_TIME * self.delta)
+            else:
                 continue
 
-            self.wait_until_next_perfect_weight_setting_opportunity(skip_current_tempo=True)
+            self.wait_until_next_perfect_weight_setting_opportunity()
 
 
 if __name__ == "__main__":
