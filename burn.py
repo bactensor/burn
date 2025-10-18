@@ -459,7 +459,9 @@ class BurnValidator:
             uids, weights = self.prepare_weight_payload(neurons, burn_uid, this_uid)
             # TODO: should retry without ensuring vpermit again, version key etc
             if self.submit_weights(uids, weights, version_key):
-                time.sleep(BLOCK_TIME * self.delta)
+                pause = BLOCK_TIME * self.delta
+                logger.info("sleeping %i after setting weights", pause)
+                time.sleep(pause)
             else:
                 continue
 
