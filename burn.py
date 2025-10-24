@@ -193,18 +193,18 @@ class BurnValidator:
     def get_max_weight_limit(self):
         try:
             response = self.subtensor.query_subtensor(
-                "MaxWeightLimit",
+                "MaxWeightsLimit",
                 params=[self.config.netuid],
             )
         except Exception as e:
-            logger.error("Error fetching MaxWeightLimit: %s", e)
+            logger.error("Error fetching MaxWeightsLimit: %s", e)
             return 65535
 
         value = getattr(response, "value", response)
         try:
             return max(int(value), 1)
         except (TypeError, ValueError):
-            logger.warning("Unexpected MaxWeightLimit value: %s", value)
+            logger.warning("Unexpected MaxWeightsLimit value: %s", value)
             return 65535
 
     def select_epsilon_uids(self, neurons, this_uid, burn_uid, min_allowed_weights):
